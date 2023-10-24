@@ -146,32 +146,58 @@ struct Mat3
 
 
 
+/*
+@brief Позволяет генерировать лучи от "камеры" в направлении координат экрана.
+"Камера" всегда располагается в начале координат.
+По умолчанию "камера" смотрит вдоль оси Oy, X координата экрана направлена вдоль оси Ox,
+а Y координата - против оси Oz.
+*/
 class RayGenerator
 {
 public:
+	/*
+	@param screenWidth Ширина экрана в пикселях.
+	@param screenHeigth Высота экрана в пикселях.
+	@param hAngle Угол обзора камеры по горизонтали в радианах.
+	@param vAngle Угол обзора камеры по вертикали в радианах.
+	*/
 	explicit RayGenerator(
 		int screenWidth,
 		int screenHeigth,
 		float hAngle,
-		float vAngle,
-		float pitch,
-		float yaw
+		float vAngle
 	) noexcept
-		: hOBias{ -screenWidth / 2.0f }
+		: hBias{ -screenWidth / 2.0f }
 		, hMultiplayer{ std::tan( hAngle / 2 ) * 2.0f / screenWidth }
 		, vBias{ -screenHeigth / 2.0f }
 		, vMultiplayer{ -std::tan( vAngle / 2 ) * 2.0f / screenHeigth }
-		, rotor{ Mat3::RotateZ( yaw ) * Mat3::RotateX( pitch ) }
+		, rotor{}
 	{
 	}
 
+	/*
+	@brief адаёт поворот "камеры" с помощью углов Эйлера.
+	@param pitch Угол поворота вдоль оси Ox в радианах (крен).
+	@param yaw Угол поворота вокруг оси Oz в радианах (тангаж).
+	*/
+	void Rotate( float pitch, float yaw ) noexcept
+	{
+		rotor = Mat3::RotateZ( yaw ) * Mat3::RotateX( pitch );
+	}
+
+	/*
+	@brief Генерирует луч от начала координат в направлении координат экрана.
+	@param windowCoords Координаты экрана в пикселях, в направлении которых указывает луч.
+	@return Луч от начала координат. Если не применено вращение с помощью метода Rotate(),
+	координата Y луча будет всегда равна 1.
+	*/
 	Vec3 Generate( const Vec2& windowCoords ) const noexcept
 	{
-		return rotor * Vec3{ (windowCoords.x + hOBias) * hMultiplayer, 1.0f, (windowCoords.y + vBias) * vMultiplayer };
+		return rotor * Vec3{ (windowCoords.x + hBias) * hMultiplayer, 1.0f, (windowCoords.y + vBias) * vMultiplayer };
 	}
 
 private:
-	float hOBias;
+	float hBias;
 	float hMultiplayer;
 	float vBias;
 	float vMultiplayer;
@@ -180,12 +206,20 @@ private:
 
 
 
+/*
+@brief Обнаоуживает пересечение луча с плоскостью Oxy.
+@param start Начало луча.
+@param direction Направление луча.
+@return Точка пересечения луча с плоскостью Oxy.
+*/
 Vec3 CastRay(const Vec3& start, const Vec3& direction) noexcept
 {
-	// some math:
+	// немного математики:
+	// положим плоскость проходит через точку [0, 0, 0],
+	// тогда условие для пересечения луча запишем через скалярное произведение 
 	//     (start + d * direction) * normal == 0
 	//     d == -(start * normal) / (direction * normal)
-	// assume: normal = [0, 0, 1]
+	// для плоскости Oxy нормаль normal = [0, 0, 1]
 	//     d == -start.z / direction.z
 
 	float d = -start.z / direction.z;
@@ -202,7 +236,9 @@ int main()
 		1920,                 // width 1920px
 		1080,                 // height 1080px
 		pi / 3,               // 60° h fov
-		pi / 4.5f,            // 60° v fov
+		pi / 4.5f );          // 40° v fov
+
+	generator.Rotate(
 		-pi / 180.0f * 37.0f, // pitch -37°
 		pi / 18.0f );         // yaw 10°
 
